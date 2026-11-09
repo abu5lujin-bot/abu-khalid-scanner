@@ -3,110 +3,115 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ماسح أبو خالد</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ماسح أبو خالد v3</title>
 <style>
-body{margin:0;background:#101827;color:#fff;font-family:Arial,sans-serif;padding:16px}
-h2{color:#65e6b1;margin-bottom:5px}
-.sub{color:#aab6c8;font-size:13px}
-.status{padding:12px;background:#1d2b40;border-radius:10px;margin:15px 0}
-input,button{padding:12px;border:0;border-radius:9px;font-size:15px}
-input{width:65%;background:#26364d;color:white}
-button{background:#16a879;color:white}
-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:13px}
-th,td{padding:11px 5px;border-bottom:1px solid #2a394d;text-align:center}
-th{color:#9fb2ca}
-.green{color:#4ee3a2}
-.red{color:#ff7777}
-.coin{font-weight:bold;color:#fff}
-.note{font-size:12px;color:#aab6c8;line-height:1.8;margin-top:18px}
+body{background:#101827;color:white;font-family:Arial;margin:0;padding:18px}
+h2{color:#80dfb2;text-align:center}
+p{color:#aab6c8;text-align:center}
+#status{background:#253149;padding:16px;border-radius:12px;text-align:center}
+.controls{display:flex;gap:8px;margin:18px 0}
+input{flex:1;min-width:0;background:#303d56;color:white;border:0;padding:13px;border-radius:9px}
+button{background:#48a57f;color:white;border:0;border-radius:9px;padding:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:12px 3px;border-bottom:1px solid #354258;text-align:right}
+th{color:#b4c3d8}
+.green{color:#60dfa4}.red{color:#ff7777}
+small{color:#aab6c8}
 </style>
 </head>
 <body>
-<h2>🚀 ماسح أبو خالد</h2>
-<div class="sub">مؤشر القراءة الاستباقية | عقود Binance USDT</div>
-<div class="status" id="status">جارٍ الاتصال ببيانات Binance...</div>
-<input id="search" placeholder="ابحث عن عملة..." oninput="render()">
-<button onclick="loadData()">تحديث</button>
+<h2>🚀 ماسح أبو خالد v3</h2>
+<p>عقود Binance USDT | تحديث تلقائي</p>
+<div id="status">جار تحميل البيانات...</div>
+<p id="updated">آخر تحديث: —</p>
+<div class="controls">
+<input id="search" placeholder="ابحث عن عملة">
+<button onclick="load()">تحديث</button>
+</div>
 <table>
-<thead>
-<tr><th>العملة</th><th>السعر</th><th>التغير %</th><th>الفوليوم 24س</th></tr>
-</thead>
+<thead><tr>
+<th>العملة</th><th>السعر</th>
+<th>التغير %</th><th>الفوليوم 24س</th>
+</tr></thead>
 <tbody id="rows"></tbody>
 </table>
-<div class="note">
-<b>طريقة القراءة:</b><br>
-🟢 نراقب ارتفاع الفوليوم مع استقرار السعر قبل الانطلاقة.<br>
-⚠️ ارتفاع السعر وحده ليس إشارة دخول.<br>
-هذا الإصدار يرصد السعر والفوليوم فقط، ولا يقرأ دفتر الأوامر أو امتصاص البيع بعد.
-</div>
+<p><small>الفوليوم خلال 24 ساعة متحركة، وليس تدفق شراء لحظيًا. البيانات للمراقبة وليست إشارة دخول.</small></p>
 <script>
-let coins=[];
-let socket;
-
+let coins=[],busy=false,last=0;
+const endpoints=[
+'https://fapi.binance.com',
+'https://fapi1.binance.com',
+'https://fapi2.binance.com',
+'https://fapi3.binance.com'
+];
 function fmt(n){
- if(n>=1e9)return (n/1e9).toFixed(2)+'B';
- if(n>=1e6)return (n/1e6).toFixed(2)+'M';
- if(n>=1e3)return (n/1e3).toFixed(1)+'K';
- return Number(n).toFixed(6);
+n=Number(n);
+if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+return n.toLocaleString('en-US',{maximumFractionDigits:2});
+}
+function price(n){
+n=Number(n);
+return n>=100?n.toFixed(2):
+n>=1?n.toFixed(4):
+n>=0.01?n.toFixed(6):n.toPrecision(5);
 }
 function render(){
- let q=document.getElementById('search').value.toUpperCase();
- let list=coins.filter(c=>c.s.endsWith('USDT')&&c.s.includes(q))
- .sort((a,b)=>b.v-a.v).slice(0,100);
- document.getElementById('rows').innerHTML=list.map(c=>{
- let cls=c.p>=0?'green':'red';
- return `<tr>
- <td class="coin">${c.s.replace('USDT','')}</td>
- <td>${fmt(c.c)}</td>
- <td class="${cls}">${c.p.toFixed(2)}%</td>
- <td>${fmt(c.v)}</td>
- </tr>`;
- }).join('');
+let q=document.getElementById('search').value.toUpperCase();
+let list=coins.filter(x=>x.symbol.includes(q)).slice(0,150);
+document.getElementById('rows').innerHTML=list.map(x=>{
+let change=Number(x.priceChangePercent);
+return '<tr><td><b>'+x.symbol.replace('USDT','')+
+'</b></td><td>'+price(x.lastPrice)+
+'</td><td class="'+(change>=0?'green':'red')+'">'+
+change.toFixed(2)+'%</td><td>'+
+fmt(x.quoteVolume)+'</td></tr>';
+}).join('');
 }
-async function loadData(){
- try{
- let r=await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
- let info=await r.json();
- let allowed=new Set(info.symbols.filter(x=>
- x.contractType==='PERPETUAL'&&x.quoteAsset==='USDT'&&x.status==='TRADING'
- ).map(x=>x.symbol));
- let t=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
- let data=await t.json();
- coins=data.filter(x=>allowed.has(x.symbol)).map(x=>({
- s:x.symbol,c:+x.lastPrice,p:+x.priceChangePercent,
- v:+x.quoteVolume
- }));
- render();
- document.getElementById('status').innerText='متصل ببيانات العقود | '+coins.length+' عملة';
- connect();
- }catch(e){
- document.getElementById('status').innerText='تعذر الاتصال. اضغط تحديث للمحاولة.';
- }
+async function request(base){
+let controller=new AbortController();
+let timer=setTimeout(()=>controller.abort(),9000);
+try{
+let response=await fetch(base+'/fapi/v1/ticker/24hr',{signal:controller.signal,cache:'no-store'});
+if(!response.ok)throw Error('HTTP '+response.status);
+let data=await response.json();
+if(!Array.isArray(data))throw Error('Invalid data');
+return data;
+}finally{clearTimeout(timer)}
 }
-function connect(){
- if(socket)socket.close();
- socket=new WebSocket('wss://fstream.binance.com/ws/!ticker@arr');
- socket.onmessage=e=>{
- try{
- let data=JSON.parse(e.data);
- data.forEach(x=>{
- let c=coins.find(z=>z.s===x.s);
- if(c){
- c.c=+x.c;c.p=+x.P;c.v=+x.q;
- }
- });
- render();
- document.getElementById('status').innerText='البث المباشر يعمل الآن 🟢 | '+coins.length+' عملة';
- }catch(err){}
- };
- socket.onclose=()=>{
- document.getElementById('status').innerText='انقطع البث، جارٍ إعادة الاتصال...';
- setTimeout(connect,5000);
- };
- socket.onerror=()=>socket.close();
+async function load(){
+if(busy)return;
+busy=true;
+document.getElementById('status').textContent=
+coins.length?'جار تحديث البيانات...':'جار الاتصال...';
+try{
+let data=null;
+for(let base of endpoints){
+try{data=await request(base);break}catch(e){}
 }
-loadData();
+if(!data)throw Error('تعذر الوصول إلى Binance');
+coins=data.filter(x=>x.symbol.endsWith('USDT')&&
+Number.isFinite(Number(x.quoteVolume)))
+.sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume));
+last=Date.now();
+render();
+document.getElementById('status').textContent=
+'متصل | '+coins.length+' عملة';
+document.getElementById('updated').textContent=
+'آخر تحديث: '+new Date(last).toLocaleTimeString('ar-SA');
+}catch(e){
+document.getElementById('status').textContent=
+coins.length?'تعذر التحديث؛ البيانات السابقة محفوظة، وستتم إعادة المحاولة':
+'تعذر الاتصال؛ ستتم إعادة المحاولة تلقائيًا';
+}finally{busy=false}
+}
+document.getElementById('search').addEventListener('input',render);
+document.addEventListener('visibilitychange',()=>{
+if(!document.hidden)load();
+});
+load();
+setInterval(()=>{if(!document.hidden)load()},15000);
 </script>
 </body>
 </html>
